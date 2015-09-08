@@ -3,7 +3,6 @@ package com.example.android.sunshine.app.sync;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.annotation.SuppressLint;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.AbstractThreadedSyncAdapter;
 import android.content.ContentProviderClient;
@@ -25,6 +24,7 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.IntDef;
 import android.support.v4.app.NotificationCompat;
+import android.support.v4.app.NotificationManagerCompat;
 import android.support.v4.app.TaskStackBuilder;
 import android.text.format.Time;
 import android.util.Log;
@@ -465,8 +465,12 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                             );
                     mBuilder.setContentIntent(resultPendingIntent);
 
-                    NotificationManager mNotificationManager =
-                            (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+//                    NotificationManager mNotificationManager =
+//                            (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+
+                    NotificationManagerCompat mNotificationManager =
+                            NotificationManagerCompat.from(context);
+
                     // WEATHER_NOTIFICATION_ID allows you to update the notification later on.
                     mNotificationManager.notify(WEATHER_NOTIFICATION_ID, mBuilder.build());
 

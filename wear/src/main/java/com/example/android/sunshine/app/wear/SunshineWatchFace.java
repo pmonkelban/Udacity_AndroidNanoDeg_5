@@ -34,6 +34,9 @@ import android.support.wearable.watchface.WatchFaceStyle;
 import android.text.format.Time;
 import android.view.SurfaceHolder;
 
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationServices;
+
 import java.lang.ref.WeakReference;
 import java.util.Calendar;
 import java.util.TimeZone;
@@ -44,6 +47,7 @@ import java.util.concurrent.TimeUnit;
  * devices with low-bit ambient mode, the hands are drawn without anti-aliasing in ambient mode.
  */
 public class SunshineWatchFace extends CanvasWatchFaceService {
+
     /**
      * Update rate in milliseconds for interactive mode. We update once a second to advance the
      * second hand.
@@ -54,6 +58,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
      * Handler message id for updating the time periodically in interactive mode.
      */
     private static final int MSG_UPDATE_TIME = 0;
+
+    private SunTimesProvider mSunTimesProvider;
 
     @Override
     public Engine onCreateEngine() {
@@ -105,6 +111,9 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             mHandPaint.setStrokeCap(Paint.Cap.ROUND);
 
             mTime = new Time();
+
+            mSunTimesProvider = new SunTimesProvider(getApplicationContext());
+
         }
 
         @Override
@@ -326,8 +335,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
 
     private void drawSunriseSunsetShades(Canvas canvas, RectF bounds)  {
 
-        Calendar sunRiseCal = SunTimesProvider.getSunrise();
-        Calendar sunSetCal  = SunTimesProvider.getSunset();
+        Calendar sunRiseCal = mSunTimesProvider.getSunrise();
+        Calendar sunSetCal  = mSunTimesProvider.getSunset();
 
         float srDeg;
         float ssDeg;
@@ -343,8 +352,8 @@ public class SunshineWatchFace extends CanvasWatchFaceService {
             ssDeg = 180f;
 
         } else  {
-            srDeg = convertTimeToDeg(SunTimesProvider.getSunrise());
-            ssDeg = convertTimeToDeg(SunTimesProvider.getSunset());
+            srDeg = convertTimeToDeg(mSunTimesProvider.getSunrise());
+            ssDeg = convertTimeToDeg(mSunTimesProvider.getSunset());
         }
 
 
