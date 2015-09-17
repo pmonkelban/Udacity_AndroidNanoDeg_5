@@ -214,10 +214,10 @@ public class RingsWatchFace extends CanvasWatchFaceService {
                     names[calendar.get(Calendar.MONTH)], names);
 
             // Draw Day of Week band
-            y -= VERTICAL_SPACING;
+              y -= VERTICAL_SPACING;
             names = (mAmbient) ? DAY_NAMES_AMBIENT : DAY_NAMES;
             drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    names[calendar.get(Calendar.DAY_OF_WEEK)], names);
+                    names[calendar.get(Calendar.DAY_OF_WEEK) - 1], names);
 
             // Draw Second band
             y -= VERTICAL_SPACING;
