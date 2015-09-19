@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package com.example.android.sunshine.app.sunshinewatchface;
+package com.example.android.sunshine.app;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
@@ -29,11 +31,24 @@ import android.os.Handler;
 import android.os.Message;
 import android.support.wearable.watchface.CanvasWatchFaceService;
 import android.support.wearable.watchface.WatchFaceStyle;
-import android.text.format.Time;
+import android.util.Log;
 import android.view.SurfaceHolder;
 
-import com.example.android.sunshine.app.sunshinewatchface.R;import java.lang.IllegalArgumentException;import java.lang.Override;import java.lang.String;import java.lang.System;import java.lang.ref.WeakReference;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.wearable.Asset;
+import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataEvent;
+import com.google.android.gms.wearable.DataEventBuffer;
+import com.google.android.gms.wearable.DataItem;
+import com.google.android.gms.wearable.DataMap;
+import com.google.android.gms.wearable.DataMapItem;
+import com.google.android.gms.wearable.Wearable;
+
+import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
@@ -42,7 +57,22 @@ import java.util.concurrent.TimeUnit;
  * Analog watch face with a ticking second hand. In ambient mode, the second hand isn't shown. On
  * devices with low-bit ambient mode, the hands are drawn without anti-aliasing in ambient mode.
  */
-public class RingsWatchFace extends CanvasWatchFaceService {
+public class RingsWatchFace extends CanvasWatchFaceService implements DataApi.DataListener,
+     GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener  {
+
+    public static final String TAG = RingsWatchFace.class.getSimpleName();
+    private static final String SUNSHINE_HIGH_TEMP = "weather-high";
+    private static final String SUNSHINE_LOW_TEMP = "weather-low";
+    private static final String SUNSHINE_ICON = "weather-icon";
+    private static final String SUNSHINE_DATA_PATH = "/sunshine-weather-data";
+
+    GoogleApiClient mGoogleApiClient;
+
+    private String mHighTemp = "";
+    private String mLowTemp = "";
+    private Bitmap mWeatherIcon;
+
+
     /**
      * Update rate in milliseconds for interactive mode. We update once a second to advance the
      * second hand.
@@ -56,6 +86,15 @@ public class RingsWatchFace extends CanvasWatchFaceService {
 
     @Override
     public Engine onCreateEngine() {
+        mGoogleApiClient = new GoogleApiClient.Builder(RingsWatchFace.this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(Wearable.API)
+                .build();
+        mGoogleApiClient.connect();
+
+        Log.d(TAG, "mGoogleApiClient.connect() called");
+
         return new Engine();
     }
 
@@ -63,16 +102,20 @@ public class RingsWatchFace extends CanvasWatchFaceService {
         Paint mBackgroundPaint;
         Paint mInactivePaint;
         Paint mActivePaint;
+        Paint mAmbientPaint;
+
         boolean mAmbient;
-        Time mTime;
+        Calendar mCal;
 
         final Handler mUpdateTimeHandler = new EngineHandler(this);
 
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                mTime.clear(intent.getStringExtra("time-zone"));
-                mTime.setToNow();
+//                mTime.clear(intent.getStringExtra("time-zone"));
+//                mTime.setToNow();
+                mCal.setTimeZone(TimeZone.getTimeZone(intent.getStringExtra("time-zone")));
+
             }
         };
         boolean mRegisteredTimeZoneReceiver = false;
@@ -100,21 +143,30 @@ public class RingsWatchFace extends CanvasWatchFaceService {
 
             mInactivePaint = new Paint();
             mInactivePaint.setColor(resources.getColor(R.color.inactive_text));
-            mInactivePaint.setStrokeWidth(resources.getDimension(R.dimen.analog_hand_stroke));
+//            mInactivePaint.setStrokeWidth(resources.getDimension(R.dimen.analog_hand_stroke));
             mInactivePaint.setAntiAlias(true);
             mInactivePaint.setStrokeCap(Paint.Cap.ROUND);
             mInactivePaint.setTextSize(resources.getDimension(R.dimen.inactive_text_size));
 
             mActivePaint = new Paint();
             mActivePaint.setColor(resources.getColor(R.color.active_text));
-            mActivePaint.setStrokeWidth(resources.getDimension(R.dimen.analog_hand_stroke));
+//            mActivePaint.setStrokeWidth(resources.getDimension(R.dimen.analog_hand_stroke));
             mActivePaint.setFakeBoldText(true);
             mActivePaint.setAntiAlias(true);
             mActivePaint.setStrokeCap(Paint.Cap.ROUND);
             mActivePaint.setTextSize(resources.getDimension(R.dimen.active_text_size));
 
+            mAmbientPaint = new Paint();
+            mAmbientPaint.setColor(resources.getColor(R.color.active_text));
+//            mAmbientPaint.setStrokeWidth(resources.getDimension(R.dimen.analog_hand_stroke));
+            mAmbientPaint.setFakeBoldText(false);
+            mAmbientPaint.setAntiAlias(true);
+            mAmbientPaint.setStrokeCap(Paint.Cap.ROUND);
+            mAmbientPaint.setTextSize(resources.getDimension(R.dimen.active_text_size));
 
-            mTime = new Time();
+//            mTime = new Time();
+            mCal = new GregorianCalendar();
+
         }
 
         @Override
@@ -179,7 +231,7 @@ public class RingsWatchFace extends CanvasWatchFaceService {
 
         @Override
         public void onDraw(Canvas canvas, Rect bounds) {
-            Calendar calendar = new GregorianCalendar();
+            mCal.setTime(new Date());
 
             int width = bounds.width();
             int height = bounds.height();
@@ -199,75 +251,76 @@ public class RingsWatchFace extends CanvasWatchFaceService {
 
             // Draw Day of Month band
             int y = VERTICAL_BASE;
-            int numDaysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH);
+            int numDaysInMonth = mCal.getActualMaximum(Calendar.DAY_OF_MONTH);
             String[] dayInMonthBand = new String[numDaysInMonth];
             for (int i = 0; i < numDaysInMonth; i++)  {
                 dayInMonthBand[i] = "" + (i + 1);
             }
-            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    "" + calendar.get(Calendar.DAY_OF_MONTH), dayInMonthBand);
+            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                    "" + mCal.get(Calendar.DAY_OF_MONTH), dayInMonthBand);
 
             // Draw Month band
             y -= VERTICAL_SPACING;
             String[] names = (mAmbient) ? MONTH_NAMES_AMBIENT : MONTH_NAMES;
-            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    names[calendar.get(Calendar.MONTH)], names);
+            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                    names[mCal.get(Calendar.MONTH)], names);
 
             // Draw Day of Week band
               y -= VERTICAL_SPACING;
             names = (mAmbient) ? DAY_NAMES_AMBIENT : DAY_NAMES;
-            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    names[calendar.get(Calendar.DAY_OF_WEEK) - 1], names);
+            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                    names[mCal.get(Calendar.DAY_OF_WEEK) - 1], names);
 
             // Draw Second band
             y -= VERTICAL_SPACING;
 
             if (!mAmbient) {
-                drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                        MINUTES_OR_SECONDS[calendar.get(Calendar.SECOND)], MINUTES_OR_SECONDS);
+                drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                        MINUTES_OR_SECONDS[mCal.get(Calendar.SECOND)], MINUTES_OR_SECONDS);
             }
 
             // Draw Minute band
             y -= VERTICAL_SPACING;
-            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    MINUTES_OR_SECONDS[calendar.get(Calendar.MINUTE)], MINUTES_OR_SECONDS);
+            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                    MINUTES_OR_SECONDS[mCal.get(Calendar.MINUTE)], MINUTES_OR_SECONDS);
 
             // Draw Hour Band
             y -= VERTICAL_SPACING;
-            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas, mAmbient,
-                    HOURS[calendar.get(Calendar.HOUR)], MINUTES_OR_SECONDS);
+            drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
+                    HOURS[mCal.get(Calendar.HOUR)], MINUTES_OR_SECONDS);
+
+            // Do not draw the weather data if in ambient mode.
+            if (!mAmbient)  {
+
+                Log.d(TAG, "mLowTemp=" + mLowTemp);
+                Log.d(TAG, "mHighTemp=" + mHighTemp);
+                Log.d(TAG, "mWeatherIcon is " + ((mWeatherIcon == null) ? "" : "not ") + " null");
 
 
+                canvas.drawText(mLowTemp, 50, height - 50, mActivePaint);
 
-//            float secRot = mTime.second / 30f * (float) Math.PI;
-//            int minutes = mTime.minute;
-//            float minRot = minutes / 30f * (float) Math.PI;
-//            float hrRot = ((mTime.hour + (minutes / 60f)) / 6f) * (float) Math.PI;
-//
-//            float secLength = centerX - 20;
-//            float minLength = centerX - 40;
-//            float hrLength = centerX - 80;
-//
-//            if (!mAmbient) {
-//                float secX = (float) Math.sin(secRot) * secLength;
-//                float secY = (float) -Math.cos(secRot) * secLength;
-//                canvas.drawLine(centerX, centerY, centerX + secX, centerY + secY, mInactivePaint);
-//            }
-//
-//            float minX = (float) Math.sin(minRot) * minLength;
-//            float minY = (float) -Math.cos(minRot) * minLength;
-//            canvas.drawLine(centerX, centerY, centerX + minX, centerY + minY, mInactivePaint);
-//
-//            float hrX = (float) Math.sin(hrRot) * hrLength;
-//            float hrY = (float) -Math.cos(hrRot) * hrLength;
-//            canvas.drawLine(centerX, centerY, centerX + hrX, centerY + hrY, mInactivePaint);
+                canvas.drawText(mHighTemp,
+                        (width - 50 - mActivePaint.measureText(mHighTemp)),
+                        height - 50, mActivePaint);
+
+                if (mWeatherIcon != null) {
+                    Rect rect = new Rect(
+                            (int)(centerX - 20),
+                            (int)(height - 80),
+                            (int)(centerX + 20),
+                            (int)(height - 40));
+
+                    canvas.drawBitmap(mWeatherIcon, null, rect, mActivePaint);
+                }
+
+            }
+
         }
 
         private void drawBand(int y, float x, int width, int spacing, Canvas canvas,
-                              boolean isAmbient, String word, String[] words)  {
+                              String word, String[] words)  {
 
             int baseWordIndex = -1;
-
 
             for (int i = 0; i < words.length; i++)  {
               if (words[i].equals(word))  {
@@ -280,13 +333,19 @@ public class RingsWatchFace extends CanvasWatchFaceService {
                 throw new IllegalArgumentException("Cannot find word:" + word + " in word list");
             }
 
-            float baseWordWidth = mActivePaint.measureText(words[baseWordIndex]);
+
+            float baseWordWidth = (mAmbient) ? mAmbientPaint.measureText(words[baseWordIndex]) :
+                    mActivePaint.measureText(words[baseWordIndex]);
 
             float textStart = x - (baseWordWidth / 2f);
 
-            canvas.drawText(word, textStart, y, mActivePaint);
+            canvas.drawText(word, textStart, y, (mAmbient) ? mAmbientPaint : mActivePaint);
 
-            if (isAmbient) return;
+            /*
+            * If in ambient mode, we'll only draw the main word.
+            * Below here are the strings that appear to the left and the right.
+            */
+            if (mAmbient) return;
 
             float textEnd = textStart - spacing;
 
@@ -329,8 +388,11 @@ public class RingsWatchFace extends CanvasWatchFaceService {
                 registerReceiver();
 
                 // Update time zone in case it changed while we weren't visible.
-                mTime.clear(TimeZone.getDefault().getID());
-                mTime.setToNow();
+//                mTime.clear(TimeZone.getDefault().getID());
+//                mTime.setToNow();
+                mCal.setTimeZone(TimeZone.getDefault());
+                mCal.setTime(new Date());
+
             } else {
                 unregisterReceiver();
             }
@@ -408,5 +470,65 @@ public class RingsWatchFace extends CanvasWatchFaceService {
                 }
             }
         }
+    }
+
+    @Override
+    public void onConnected(Bundle bundle) {
+        Log.i(TAG, "onConnected() called");
+        Wearable.DataApi.addListener(mGoogleApiClient, this);
+
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        Log.i(TAG, "onConnectionSuspended() called, i=" + i);
+    }
+
+    @Override
+    public void onDataChanged(DataEventBuffer dataEventBuffer) {
+
+        Log.i(TAG, "onDataChanged() called");
+
+        for (DataEvent dataEvent : dataEventBuffer) {
+            if (dataEvent.getType() != DataEvent.TYPE_CHANGED) {
+                continue;
+            }
+
+            DataItem dataItem = dataEvent.getDataItem();
+            if (!dataItem.getUri().getPath().equals(SUNSHINE_DATA_PATH)) {
+                continue;
+            }
+
+            DataMapItem dataMapItem = DataMapItem.fromDataItem(dataItem);
+            DataMap dataMap = dataMapItem.getDataMap();
+            mHighTemp = dataMap.getString(SUNSHINE_HIGH_TEMP);
+            mLowTemp = dataMap.getString(SUNSHINE_LOW_TEMP);
+            Asset iconAsset = dataMap.getAsset(SUNSHINE_ICON);
+
+            if (iconAsset != null) {
+
+                ConnectionResult connectionResult =
+                        mGoogleApiClient.blockingConnect(500, TimeUnit.MILLISECONDS);
+
+                if (connectionResult.isSuccess()) {
+
+                    InputStream assetInputStream =
+                            Wearable.DataApi.getFdForAsset(mGoogleApiClient, iconAsset)
+                                    .await().getInputStream();
+
+                    mGoogleApiClient.disconnect();
+
+                    if (assetInputStream != null) {
+                        mWeatherIcon = BitmapFactory.decodeStream(assetInputStream);
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+        Log.i(TAG, "onConnectionFailed() called");
+
     }
 }
