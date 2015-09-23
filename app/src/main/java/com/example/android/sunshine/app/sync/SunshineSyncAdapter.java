@@ -40,6 +40,7 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Asset;
 import com.google.android.gms.wearable.DataApi;
+import com.google.android.gms.wearable.DataItemBuffer;
 import com.google.android.gms.wearable.PutDataMapRequest;
 import com.google.android.gms.wearable.PutDataRequest;
 import com.google.android.gms.wearable.Wearable;
@@ -414,7 +415,9 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                                         Log.e(LOG_TAG, "Failed to send weather data to wearable");
                                     }
                                 }
+
                             });
+
                 }
             }
 

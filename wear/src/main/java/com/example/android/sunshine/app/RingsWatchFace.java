@@ -515,9 +515,7 @@ public class RingsWatchFace extends CanvasWatchFaceService implements DataApi.Da
                     InputStream assetInputStream =
                             Wearable.DataApi.getFdForAsset(mGoogleApiClient, iconAsset)
                                     .await().getInputStream();
-
-                    mGoogleApiClient.disconnect();
-
+                    
                     if (assetInputStream != null) {
                         mWeatherIcon = BitmapFactory.decodeStream(assetInputStream);
                     }
