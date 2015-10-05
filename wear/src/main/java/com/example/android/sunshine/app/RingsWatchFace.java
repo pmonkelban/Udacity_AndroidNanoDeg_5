@@ -287,7 +287,7 @@ public class RingsWatchFace extends CanvasWatchFaceService implements DataApi.Da
             // Draw Hour Band
             y -= VERTICAL_SPACING;
             drawBand(y, centerX, width, HORIZONTAL_SPACING, canvas,
-                    HOURS[mCal.get(Calendar.HOUR)], MINUTES_OR_SECONDS);
+                    HOURS[mCal.get(Calendar.HOUR)], HOURS);
 
             // Do not draw the weather data if in ambient mode.
             if (!mAmbient)  {
